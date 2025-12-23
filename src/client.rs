@@ -1,16 +1,13 @@
 use crate::crt::Crt;
 use cli_table::{print_stdout, WithTitle};
 use reqwest::blocking::Client;
-use reqwest::cookie::Jar;
-use reqwest::header::{HeaderName, CONTENT_TYPE};
-use reqwest::{Method, Url};
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, Value};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
-use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -21,7 +18,6 @@ const USER_AGENT: &str = "rs-crtsh/1.0";
 pub(crate) const DEFAULT_RETRY_COUNT: u32 = 0;
 pub(crate) const DEFAULT_RETRY_DELAY: f64 = 1.0;
 pub(crate) const DEFAULT_TIMEOUT_SECS: u64 = 30;
-pub(crate) const DEFAULT_METHOD: &str = "GET";
 
 // リトライ関連
 const RETRY_BACKOFF_MULTIPLIER: f64 = 2.0;
@@ -35,15 +31,8 @@ const SERVER_ERROR_END: u16 = 599;
 const TOO_MANY_REQUESTS: u16 = 429;
 const REQUEST_TIMEOUT: u16 = 408;
 
-// Content-Type
-const CONTENT_TYPE_FORM: &str = "application/x-www-form-urlencoded";
-const CONTENT_TYPE_JSON: &str = "application/json; charset=utf-8";
-
 // 認証プレースホルダー
 const BASIC_AUTH_PLACEHOLDER: &str = "Basic <credentials>";
-
-// JSONフィルタ関連
-const JSON_PATH_ROOT: &str = ".";
 
 // エラーメッセージ
 const ERROR_REQUEST_CLONE: &str = "Failed to clone request for retry";
@@ -63,36 +52,9 @@ const HTTP_RETRY_MSG: &str = "HTTP {} - retrying after delay...";
 const REQUEST_ERROR_RETRY_MSG: &str = "Request error: {} - retrying after delay...";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BasicAuthConfig {
-    pub user: String,
-    pub pass: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProxyConfig {
-    pub host: String,
-    pub port: String,
-    pub user: Option<String>,
-    pub pass: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub basic_auth: Option<BasicAuthConfig>,
-    pub cookies: Option<Vec<String>>,
-    pub dry_run: bool,
-    pub form_data: Option<String>,
-    pub form: Option<Vec<String>>,
-    pub headers: Option<Vec<String>>,
-    pub json: Option<String>,
-    pub json_filter: Option<String>,
-    pub method: String,
-    pub output: Option<String>,
-    pub pretty_json: bool,
-    pub proxy: Option<ProxyConfig>,
     pub retry: u32,
     pub retry_delay: f64,
-    pub silent: bool,
     pub timeout: u64,
     pub timing: bool,
     pub url: String,
@@ -107,44 +69,18 @@ struct ConfigFile {
 #[derive(Debug, Clone, Deserialize)]
 struct ConfigPreset {
     url: Option<String>,
-    method: Option<String>,
-    headers: Option<Vec<String>>,
     timeout: Option<u64>,
-    pretty_json: Option<bool>,
     timing: Option<bool>,
     verbose: Option<bool>,
-    silent: Option<bool>,
     retry: Option<u32>,
     retry_delay: Option<f64>,
-    json: Option<String>,
-    json_filter: Option<String>,
-    form_data: Option<String>,
-    form: Option<Vec<String>>,
-    cookies: Option<Vec<String>>,
-    output: Option<String>,
-    dry_run: Option<bool>,
-    basic_auth: Option<BasicAuthConfig>,
-    proxy: Option<ProxyConfig>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            basic_auth: None,
-            cookies: None,
-            dry_run: false,
-            form_data: None,
-            form: None,
-            headers: None,
-            json: None,
-            json_filter: None,
-            method: DEFAULT_METHOD.to_string(),
-            output: None,
-            pretty_json: false,
-            proxy: None,
             retry: DEFAULT_RETRY_COUNT,
             retry_delay: DEFAULT_RETRY_DELAY,
-            silent: false,
             timeout: DEFAULT_TIMEOUT_SECS,
             timing: false,
             url: String::new(),
@@ -246,24 +182,8 @@ fn get_preset<'a>(
 /// プリセットからConfigを作成
 fn create_config_from_preset(preset: &ConfigPreset) -> Config {
     Config {
-        basic_auth: preset.basic_auth.clone(),
-        cookies: preset.cookies.clone(),
-        dry_run: preset.dry_run.unwrap_or(false),
-        form_data: preset.form_data.clone(),
-        form: preset.form.clone(),
-        headers: preset.headers.clone(),
-        json: preset.json.clone(),
-        json_filter: preset.json_filter.clone(),
-        method: preset
-            .method
-            .clone()
-            .unwrap_or_else(|| DEFAULT_METHOD.to_string()),
-        output: preset.output.clone(),
-        pretty_json: preset.pretty_json.unwrap_or(false),
-        proxy: preset.proxy.clone(),
         retry: preset.retry.unwrap_or(DEFAULT_RETRY_COUNT),
         retry_delay: preset.retry_delay.unwrap_or(DEFAULT_RETRY_DELAY),
-        silent: preset.silent.unwrap_or(false),
         timeout: preset.timeout.unwrap_or(DEFAULT_TIMEOUT_SECS),
         timing: preset.timing.unwrap_or(false),
         url: preset.url.clone().unwrap_or_default(),
@@ -276,10 +196,6 @@ pub fn execute_request(config: Config) -> Result<(), Box<dyn Error>> {
     let request_context = create_request_context(&config)?;
 
     display_request_info(&config, &request_context);
-
-    if config.dry_run {
-        return Ok(());
-    }
 
     let (response_info, response_body, timing_info) = execute_request_with_retry(
         &request_context.client,
@@ -308,100 +224,20 @@ fn create_request_context(config: &Config) -> Result<RequestContext, Box<dyn Err
 fn create_http_client(
     config: &Config,
 ) -> Result<(Client, reqwest::header::HeaderMap), Box<dyn Error>> {
-    let mut client_builder = Client::builder()
+    let client_builder = Client::builder()
         .timeout(Duration::from_secs(config.timeout))
         .user_agent(USER_AGENT);
 
     let mut default_headers = reqwest::header::HeaderMap::new();
     default_headers.insert(reqwest::header::USER_AGENT, USER_AGENT.parse().unwrap());
 
-    client_builder = setup_proxy(client_builder, config)?;
-    client_builder = setup_cookies(client_builder, config)?;
-    let (client_builder, headers) = setup_default_headers(client_builder, config, default_headers)?;
-
-    Ok((client_builder.build()?, headers))
-}
-
-/// プロキシ設定を適用
-fn setup_proxy(
-    mut client_builder: reqwest::blocking::ClientBuilder,
-    config: &Config,
-) -> Result<reqwest::blocking::ClientBuilder, Box<dyn Error>> {
-    if let Some(proxy_config) = &config.proxy {
-        let proxy_url = format!("https://{}:{}", proxy_config.host, proxy_config.port);
-        let mut http_proxy = reqwest::Proxy::http(proxy_url)?;
-
-        if let (Some(proxy_user), Some(proxy_pass)) = (&proxy_config.user, &proxy_config.pass) {
-            http_proxy = http_proxy.basic_auth(proxy_user, proxy_pass);
-        }
-
-        client_builder = client_builder.proxy(http_proxy);
-    }
-
-    Ok(client_builder)
-}
-
-/// クッキー設定を適用
-fn setup_cookies(
-    mut client_builder: reqwest::blocking::ClientBuilder,
-    config: &Config,
-) -> Result<reqwest::blocking::ClientBuilder, Box<dyn Error>> {
-    if let Some(cookie_list) = &config.cookies {
-        let cookie_jar = Jar::default();
-        let parsed_url = &Url::parse(&config.url)?;
-
-        for cookie_str in cookie_list {
-            cookie_jar.add_cookie_str(cookie_str, parsed_url);
-        }
-
-        client_builder = client_builder.cookie_provider(Arc::new(cookie_jar));
-    }
-
-    Ok(client_builder)
-}
-
-/// デフォルトヘッダーを設定
-fn setup_default_headers(
-    mut client_builder: reqwest::blocking::ClientBuilder,
-    config: &Config,
-    mut default_headers: reqwest::header::HeaderMap,
-) -> Result<
-    (
-        reqwest::blocking::ClientBuilder,
-        reqwest::header::HeaderMap,
-    ),
-    Box<dyn Error>,
-> {
-    if let Some(header_list) = &config.headers {
-        let mut header_map = reqwest::header::HeaderMap::new();
-
-        for header_entry in header_list {
-            if let Some((key, value)) = header_entry.split_once(':') {
-                if let Ok(header_name) = HeaderName::from_bytes(key.as_bytes()) {
-                    let header_value = value.trim();
-                    if let Ok(parsed_value) = header_value.parse() {
-                        header_map.insert(header_name.clone(), parsed_value);
-                        default_headers.insert(header_name, header_value.parse().unwrap());
-                    }
-                }
-            }
-        }
-
-        if !header_map.is_empty() {
-            client_builder = client_builder.default_headers(header_map);
-        }
-    }
-
-    Ok((client_builder, default_headers))
+    Ok((client_builder.build()?, default_headers))
 }
 
 /// HTTPリクエストを構築
 fn build_request(client: &Client, config: &Config) -> Result<reqwest::blocking::Request, Box<dyn Error>> {
-    let method = Method::from_bytes(config.method.as_bytes())?;
-    let mut request_builder = create_request_builder(client, &method, &config.url)?;
-
-    request_builder = apply_authentication(request_builder, config);
-    request_builder = apply_request_body(request_builder, config)?;
+    let method = Method::GET;
+    let request_builder = create_request_builder(client, &method, &config.url)?;
 
     Ok(request_builder.build()?)
 }
@@ -425,60 +261,13 @@ fn create_request_builder(
     Ok(request_builder)
 }
 
-/// 認証設定を適用
-fn apply_authentication(
-    mut request_builder: reqwest::blocking::RequestBuilder,
-    config: &Config,
-) -> reqwest::blocking::RequestBuilder {
-    if let Some(auth_config) = &config.basic_auth {
-        request_builder = request_builder.basic_auth(&auth_config.user, Some(&auth_config.pass));
-    }
-
-    request_builder
-}
-
-/// リクエストボディを適用
-fn apply_request_body(
-    mut request_builder: reqwest::blocking::RequestBuilder,
-    config: &Config,
-) -> Result<reqwest::blocking::RequestBuilder, Box<dyn Error>> {
-    if let Some(form_data_body) = &config.form_data {
-        request_builder = request_builder
-            .header(CONTENT_TYPE, CONTENT_TYPE_FORM)
-            .body(form_data_body.clone());
-    } else if let Some(form_params) = &config.form {
-        let param_pairs = parse_form_params(form_params);
-        request_builder = request_builder
-            .header(CONTENT_TYPE, CONTENT_TYPE_FORM)
-            .form(&param_pairs);
-    } else if let Some(json_data) = &config.json {
-        request_builder = request_builder
-            .header(CONTENT_TYPE, CONTENT_TYPE_JSON)
-            .json(json_data);
-    }
-
-    Ok(request_builder)
-}
-
-/// フォームパラメータを解析
-fn parse_form_params(form_params: &[String]) -> Vec<(String, String)> {
-    form_params
-        .iter()
-        .filter_map(|param| {
-            param
-                .split_once('=')
-                .map(|(key, value)| (key.to_string(), value.to_string()))
-        })
-        .collect()
-}
-
 /// リクエスト情報を表示
 fn display_request_info(config: &Config, context: &RequestContext) {
     if !config.verbose {
         return;
     }
 
-    println!("> {} {}", config.method, config.url);
+    println!("> GET {}", config.url);
 
     for (name, value) in &context.default_headers {
         let display_value = if name == reqwest::header::AUTHORIZATION {
@@ -682,66 +471,17 @@ fn display_timing_info(timing_info: &TimingInfo, response_size: usize, config: &
 }
 
 /// レスポンスボディをフォーマット
-fn format_response_body(body: &str, config: &Config) -> Result<String, Box<dyn Error>> {
+fn format_response_body(body: &str, _config: &Config) -> Result<String, Box<dyn Error>> {
     let json_value = match from_str::<Value>(body) {
         Ok(value) => value,
         Err(_) => return Ok(body.to_string()),
     };
 
-    let mut result = json_value;
+    let result = json_value;
 
-    if let Some(filter_path) = &config.json_filter {
-        result = extract_json_path(result, filter_path)?;
-    }
-
-    let formatted = if config.pretty_json {
-        serde_json::to_string_pretty(&result)?
-    } else {
-        serde_json::to_string(&result)?
-    };
+    let formatted = serde_json::to_string(&result)?;
 
     Ok(formatted)
-}
-
-/// JSONパスを抽出
-fn extract_json_path(mut json: Value, path: &str) -> Result<Value, Box<dyn Error>> {
-    let path = path.trim();
-
-    if path == JSON_PATH_ROOT {
-        return Ok(json);
-    }
-
-    let path = path.strip_prefix('.').unwrap_or(path);
-    let parts: Vec<&str> = path.split('.').filter(|p| !p.is_empty()).collect();
-
-    for part in parts {
-        json = process_json_path_part(json, part)?;
-    }
-
-    Ok(json)
-}
-
-/// JSONパスの一部を処理
-fn process_json_path_part(json: Value, part: &str) -> Result<Value, Box<dyn Error>> {
-    if let Some(bracket_pos) = part.find('[') {
-        let field_name = &part[..bracket_pos];
-        let index_part = &part[bracket_pos + 1..];
-
-        if let Some(close_bracket) = index_part.find(']') {
-            let index_str = &index_part[..close_bracket];
-            if let Ok(index) = index_str.parse::<usize>() {
-                let mut result = json;
-
-                if !field_name.is_empty() {
-                    result = result.get(field_name).cloned().unwrap_or(Value::Null);
-                }
-
-                return Ok(result.get(index).cloned().unwrap_or(Value::Null));
-            }
-        }
-    }
-
-    Ok(json.get(part).cloned().unwrap_or(Value::Null))
 }
 
 /// レスポンスを出力
