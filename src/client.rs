@@ -1,5 +1,6 @@
 use crate::crt::Crt;
-use cli_table::{print_stdout, WithTitle};
+use cli_table::format::Justify;
+use cli_table::{print_stdout, Cell, Style, Table};
 use reqwest::blocking::Client;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -488,7 +489,40 @@ fn format_response_body(body: &str, _config: &Config) -> Result<String, Box<dyn 
 fn output_response(processed_response: &str, _config: &Config) -> Result<(), Box<dyn Error>> {
     let crts: Vec<Crt> = from_str(processed_response)?;
 
-    assert!(print_stdout(crts.iter().with_title()).is_ok());
+    let mut table = Vec::new();
+    for crt in crts {
+        table.push(
+            vec![
+                crt.id.cell().justify(Justify::Right),
+                crt.common_name.cell(),
+                crt.entry_timestamp.unwrap_or("".to_string()).cell(),
+                crt.issuer_ca_id.to_string().cell().justify(Justify::Right),
+                crt.issuer_name.cell(),
+                crt.name_value.cell(),
+                crt.not_after.cell(),
+                crt.not_before.cell(),
+                crt.result_count.to_string().cell().justify(Justify::Right),
+                crt.serial_number.cell(),
+            ]
+        )
+    }
+
+    let ts = table
+        .table()
+        .title(vec![
+            "crt.sh ID".cell().bold(true).justify(Justify::Center),
+            "Matching Identities".cell().bold(true).justify(Justify::Center),
+            "Logged At".cell().bold(true).justify(Justify::Center),
+            "Issuer CA ID".cell().bold(true).justify(Justify::Center),
+            "Issuer Name".cell().bold(true).justify(Justify::Center),
+            "Name Value".cell().bold(true).justify(Justify::Center),
+            "Not Before".cell().bold(true).justify(Justify::Center),
+            "Not After".cell().bold(true).justify(Justify::Center),
+            "Count".cell().bold(true).justify(Justify::Center),
+            "Serial Number".cell().bold(true).justify(Justify::Center),
+        ]);
+
+    assert!(print_stdout(ts).is_ok());
 
     Ok(())
 }
