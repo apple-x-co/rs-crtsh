@@ -1,4 +1,5 @@
 mod client;
+mod crt;
 
 use crate::client::{execute_request, load_config_file, Config};
 use clap::Parser;

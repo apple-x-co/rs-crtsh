@@ -1,3 +1,5 @@
+use crate::crt::Crt;
+use cli_table::{print_stdout, WithTitle};
 use reqwest::blocking::Client;
 use reqwest::cookie::Jar;
 use reqwest::header::{HeaderName, CONTENT_TYPE};
@@ -7,7 +9,7 @@ use serde_json::{from_str, Value};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -743,20 +745,17 @@ fn process_json_path_part(json: Value, part: &str) -> Result<Value, Box<dyn Erro
 }
 
 /// レスポンスを出力
-fn output_response(processed_response: &str, config: &Config) -> Result<(), Box<dyn Error>> {
-    match &config.output {
-        Some(output_file) => save_response_to_file(output_file, processed_response.as_bytes()),
-        None if !config.silent => {
-            println!("{}", processed_response);
-            Ok(())
-        }
-        _ => Ok(()),
-    }
-}
+fn output_response(processed_response: &str, _config: &Config) -> Result<(), Box<dyn Error>> {
+    let crts: Vec<Crt> = from_str(processed_response)?;
 
-/// レスポンスをファイルに保存
-fn save_response_to_file(file_path: &str, data: &[u8]) -> Result<(), Box<dyn Error>> {
-    let mut file = File::create(file_path)?;
-    file.write_all(data)?;
+    assert!(print_stdout(crts.iter().with_title()).is_ok());
+
     Ok(())
 }
+
+// /// レスポンスをファイルに保存
+// fn save_response_to_file(file_path: &str, data: &[u8]) -> Result<(), Box<dyn Error>> {
+//     let mut file = File::create(file_path)?;
+//     file.write_all(data)?;
+//     Ok(())
+// }
