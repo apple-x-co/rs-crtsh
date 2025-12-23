@@ -499,8 +499,8 @@ fn output_response(processed_response: &str, _config: &Config) -> Result<(), Box
                 crt.issuer_ca_id.to_string().cell().justify(Justify::Right),
                 crt.issuer_name.cell(),
                 crt.name_value.cell(),
-                crt.not_after.cell(),
                 crt.not_before.cell(),
+                crt.not_after.cell(),
                 crt.result_count.to_string().cell().justify(Justify::Right),
                 crt.serial_number.cell(),
             ]
