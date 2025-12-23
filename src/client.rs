@@ -492,10 +492,3 @@ fn output_response(processed_response: &str, _config: &Config) -> Result<(), Box
 
     Ok(())
 }
-
-// /// レスポンスをファイルに保存
-// fn save_response_to_file(file_path: &str, data: &[u8]) -> Result<(), Box<dyn Error>> {
-//     let mut file = File::create(file_path)?;
-//     file.write_all(data)?;
-//     Ok(())
-// }
