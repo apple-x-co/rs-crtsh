@@ -184,14 +184,14 @@ timing = true
 verbose = false
 retry = 3
 retry_delay = 2.0
-format = "Table"
+format = "table"
 
 [presets.quick]
 timeout = 10
 timing = false
 verbose = false
 retry = 0
-format = "Table"
+format = "table"
 
 [presets.debug]
 timeout = 120
@@ -199,14 +199,14 @@ timing = true
 verbose = true
 retry = 5
 retry_delay = 3.0
-format = "Table"
+format = "table"
 
 [presets.raw]
 timeout = 30
 timing = false
 verbose = false
 retry = 0
-format = "Raw"
+format = "raw"
 ```
 
 ### 設定ファイルを使用して実行
