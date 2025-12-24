@@ -1,8 +1,8 @@
 mod client;
 mod crt;
 
-use crate::client::{execute_request, load_config_file, Config};
-use crate::client::{DEFAULT_RETRY_COUNT, DEFAULT_RETRY_DELAY, DEFAULT_TIMEOUT_SECS};
+use crate::client::{execute_request, load_config_file, Config, Format};
+use crate::client::{DEFAULT_RETRY_COUNT, DEFAULT_RETRY_DELAY, DEFAULT_TIMEOUT_SECS, DEFAULT_FORMAT};
 use clap::Parser;
 use std::error::Error;
 
@@ -15,11 +15,14 @@ struct Args {
     #[arg(short, long)]
     config: Option<String>,
 
-    #[arg(long)]
-    preset: Option<String>,
+    #[arg(short, long, default_value = DEFAULT_FORMAT)]
+    format: Option<String>,
 
     #[arg(long)]
     hostname: Option<String>,
+
+    #[arg(long)]
+    preset: Option<String>,
 
     #[arg(long, default_value_t = DEFAULT_RETRY_COUNT)]
     retry: u32,
@@ -77,7 +80,7 @@ fn apply_args_to_config(config: &mut Config, args: Args) {
     // apply_data_config(config, &args);
     apply_request_config(config, &args);
     // apply_proxy_config(config, &args);
-    // apply_output_config(config, &args);
+    apply_output_config(config, &args);
     apply_retry_config(config, &args);
     apply_flags(config, &args);
 }
@@ -90,6 +93,17 @@ fn apply_request_config(config: &mut Config, args: &Args) {
 
     if args.timeout != DEFAULT_TIMEOUT_SECS {
         config.timeout = args.timeout;
+    }
+}
+
+/// 出力設定の適用
+fn apply_output_config(config: &mut Config, args: &Args) {
+    if let Some(format) = &args.format {
+        config.format = match format.as_str() {
+            "table" => Format::Table,
+            "raw" => Format::Raw,
+            _ => Format::Table,
+        };
     }
 }
 

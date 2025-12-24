@@ -52,18 +52,19 @@ rs-crtsh --hostname example.com
 
 ### オプション一覧
 
-| オプション                         | 短縮形  | 説明            | デフォルト |
-|-------------------------------|------|---------------|-------|
-| `--hostname <HOSTNAME>`       | -    | 検索するホスト名/ドメイン | -     |
-| `--config <CONFIG>`           | `-c` | 設定ファイルのパス     | -     |
-| `--preset <PRESET>`           | -    | 使用するプリセット名    | -     |
-| `--retry <RETRY>`             | -    | リトライ回数        | 0     |
-| `--retry-delay <RETRY_DELAY>` | -    | リトライ間隔（秒）     | 1.0   |
-| `--timeout <TIMEOUT>`         | `-t` | タイムアウト時間（秒）   | 30    |
-| `--timing`                    | -    | タイミング情報を表示    | false |
-| `--verbose`                   | `-v` | 詳細な情報を表示      | false |
-| `--help`                      | `-h` | ヘルプメッセージを表示   | -     |
-| `--version`                   | `-V` | バージョン情報を表示    | -     |
+| オプション                         | 短縮形  | 説明                          | デフォルト   |
+|-------------------------------|------|-----------------------------|---------|
+| `--hostname <HOSTNAME>`       | -    | 検索するホスト名/ドメイン               | -       |
+| `--config <CONFIG>`           | `-c` | 設定ファイルのパス                   | -       |
+| `--format <FORMAT>`           | `-f` | 出力形式（table または raw）         | table   |
+| `--preset <PRESET>`           | -    | 使用するプリセット名                  | -       |
+| `--retry <RETRY>`             | -    | リトライ回数                      | 0       |
+| `--retry-delay <RETRY_DELAY>` | -    | リトライ間隔（秒）                   | 1.0     |
+| `--timeout <TIMEOUT>`         | `-t` | タイムアウト時間（秒）                 | 30      |
+| `--timing`                    | -    | タイミング情報を表示                  | false   |
+| `--verbose`                   | `-v` | 詳細な情報を表示                    | false   |
+| `--help`                      | `-h` | ヘルプメッセージを表示                 | -       |
+| `--version`                   | `-V` | バージョン情報を表示                  | -       |
 
 ## 実行例
 
@@ -145,6 +146,31 @@ rs-crtsh --hostname example.com --retry 3 --retry-delay 2
 rs-crtsh --hostname example.com --timeout 60
 ```
 
+### 生の JSON データを出力
+
+```bash
+# テーブル形式ではなく、crt.sh API から返された生の JSON データを出力
+rs-crtsh --hostname example.com --format raw
+```
+
+**出力例:**
+
+```json
+[
+  {
+    "issuer_ca_id": 204407,
+    "issuer_name": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV E36",
+    "common_name": "example.com",
+    "name_value": "*.example.com\nexample.com",
+    "id": 23164227397,
+    "entry_timestamp": "2025-12-16T21:50:43.225",
+    "not_before": "2025-12-16T00:00:00",
+    "not_after": "2026-03-16T20:59:52",
+    "serial_number": "4b87ab08fde761c73d3c9f7a6a141bd3"
+  }
+]
+```
+
 ## 設定ファイルの使用
 
 設定ファイルを使用すると、よく使う設定をプリセットとして保存できます。
@@ -158,12 +184,14 @@ timing = true
 verbose = false
 retry = 3
 retry_delay = 2.0
+format = "Table"
 
 [presets.quick]
 timeout = 10
 timing = false
 verbose = false
 retry = 0
+format = "Table"
 
 [presets.debug]
 timeout = 120
@@ -171,6 +199,14 @@ timing = true
 verbose = true
 retry = 5
 retry_delay = 3.0
+format = "Table"
+
+[presets.raw]
+timeout = 30
+timing = false
+verbose = false
+retry = 0
+format = "Raw"
 ```
 
 ### 設定ファイルを使用して実行

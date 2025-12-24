@@ -1,10 +1,10 @@
 use crate::crt::Crt;
 use cli_table::format::Justify;
-use cli_table::{print_stdout, Cell, Style, Table};
-use reqwest::blocking::Client;
+use cli_table::{Cell, Style, Table, print_stdout};
 use reqwest::Method;
+use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::{from_str, Value};
+use serde_json::{Value, from_str};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
@@ -19,6 +19,7 @@ const USER_AGENT: &str = "rs-crtsh/1.0";
 pub(crate) const DEFAULT_RETRY_COUNT: u32 = 0;
 pub(crate) const DEFAULT_RETRY_DELAY: f64 = 1.0;
 pub(crate) const DEFAULT_TIMEOUT_SECS: u64 = 30;
+pub(crate) const DEFAULT_FORMAT: &str = "table";
 
 // リトライ関連
 const RETRY_BACKOFF_MULTIPLIER: f64 = 2.0;
@@ -53,6 +54,12 @@ const HTTP_RETRY_MSG: &str = "HTTP {} - retrying after delay...";
 const REQUEST_ERROR_RETRY_MSG: &str = "Request error: {} - retrying after delay...";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Format {
+    Table,
+    Raw,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub retry: u32,
     pub retry_delay: f64,
@@ -60,6 +67,7 @@ pub struct Config {
     pub timing: bool,
     pub url: String,
     pub verbose: bool,
+    pub format: Format,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,6 +83,7 @@ struct ConfigPreset {
     verbose: Option<bool>,
     retry: Option<u32>,
     retry_delay: Option<f64>,
+    format: Option<String>,
 }
 
 impl Default for Config {
@@ -86,6 +95,7 @@ impl Default for Config {
             timing: false,
             url: String::new(),
             verbose: false,
+            format: Format::Table,
         }
     }
 }
@@ -189,6 +199,16 @@ fn create_config_from_preset(preset: &ConfigPreset) -> Config {
         timing: preset.timing.unwrap_or(false),
         url: preset.url.clone().unwrap_or_default(),
         verbose: preset.verbose.unwrap_or(false),
+        format: match preset
+            .format
+            .clone()
+            .unwrap_or(DEFAULT_FORMAT.to_string())
+            .as_str()
+        {
+            "table" => Format::Table,
+            "raw" => Format::Raw,
+            _ => Format::Table,
+        },
     }
 }
 
@@ -198,11 +218,8 @@ pub fn execute_request(config: Config) -> Result<(), Box<dyn Error>> {
 
     display_request_info(&config, &request_context);
 
-    let (response_info, response_body, timing_info) = execute_request_with_retry(
-        &request_context.client,
-        request_context.request,
-        &config,
-    )?;
+    let (response_info, response_body, timing_info) =
+        execute_request_with_retry(&request_context.client, request_context.request, &config)?;
 
     handle_response(response_info, response_body, timing_info, &config)?;
 
@@ -236,7 +253,10 @@ fn create_http_client(
 }
 
 /// HTTPリクエストを構築
-fn build_request(client: &Client, config: &Config) -> Result<reqwest::blocking::Request, Box<dyn Error>> {
+fn build_request(
+    client: &Client,
+    config: &Config,
+) -> Result<reqwest::blocking::Request, Box<dyn Error>> {
     let method = Method::GET;
     let request_builder = create_request_builder(client, &method, &config.url)?;
 
@@ -361,10 +381,7 @@ fn handle_successful_response(
 /// リトライ遅延を処理
 fn handle_retry_delay(config: &Config, current_attempt: u32, status_code: u16) {
     if config.verbose {
-        println!(
-            "{}",
-            HTTP_RETRY_MSG.replace("{}", &status_code.to_string())
-        );
+        println!("{}", HTTP_RETRY_MSG.replace("{}", &status_code.to_string()));
     }
 
     let backoff_delay = config.retry_delay
@@ -420,10 +437,7 @@ fn display_response_info(response_info: &ResponseInfo, config: &Config) {
         "< {:?} {} {}",
         response_info.version(),
         response_info.status().as_u16(),
-        response_info
-            .status()
-            .canonical_reason()
-            .unwrap_or("")
+        response_info.status().canonical_reason().unwrap_or("")
     );
 
     for (name, value) in response_info.headers() {
@@ -456,12 +470,14 @@ fn display_timing_info(timing_info: &TimingInfo, response_size: usize, config: &
         "{}",
         RESPONSE_SIZE_MSG
             .replace("{1}", &response_size.to_string())
-            .replace("{2}", &format!("{:.2}", response_size as f64 / BYTES_PER_KB))
+            .replace(
+                "{2}",
+                &format!("{:.2}", response_size as f64 / BYTES_PER_KB)
+            )
     );
 
     if response_size > 0 && timing_info.total_time.as_secs_f64() > 0.0 {
-        let throughput =
-            response_size as f64 / timing_info.total_time.as_secs_f64() / BYTES_PER_KB;
+        let throughput = response_size as f64 / timing_info.total_time.as_secs_f64() / BYTES_PER_KB;
         println!(
             "{}",
             THROUGHPUT_MSG.replace("{}", &format!("{:.2}", throughput))
@@ -486,43 +502,49 @@ fn format_response_body(body: &str, _config: &Config) -> Result<String, Box<dyn 
 }
 
 /// レスポンスを出力
-fn output_response(processed_response: &str, _config: &Config) -> Result<(), Box<dyn Error>> {
-    let crts: Vec<Crt> = from_str(processed_response)?;
+fn output_response(processed_response: &str, config: &Config) -> Result<(), Box<dyn Error>> {
+    match config.format {
+        Format::Raw => {
+            println!("{}", processed_response);
+        }
+        Format::Table => {
+            let crts: Vec<Crt> = from_str(processed_response)?;
 
-    let mut table = Vec::new();
-    for crt in crts {
-        table.push(
-            vec![
-                crt.id.cell().justify(Justify::Right),
-                crt.common_name.cell(),
-                crt.entry_timestamp.unwrap_or("".to_string()).cell(),
-                crt.issuer_ca_id.to_string().cell().justify(Justify::Right),
-                crt.issuer_name.cell(),
-                crt.name_value.cell(),
-                crt.not_before.cell(),
-                crt.not_after.cell(),
-                crt.result_count.to_string().cell().justify(Justify::Right),
-                crt.serial_number.cell(),
-            ]
-        )
+            let mut table = Vec::new();
+            for crt in crts {
+                table.push(vec![
+                    crt.id.cell().justify(Justify::Right),
+                    crt.common_name.cell(),
+                    crt.entry_timestamp.unwrap_or("".to_string()).cell(),
+                    crt.issuer_ca_id.to_string().cell().justify(Justify::Right),
+                    crt.issuer_name.cell(),
+                    crt.name_value.cell(),
+                    crt.not_before.cell(),
+                    crt.not_after.cell(),
+                    crt.result_count.to_string().cell().justify(Justify::Right),
+                    crt.serial_number.cell(),
+                ])
+            }
+
+            let ts = table.table().title(vec![
+                "crt.sh ID".cell().bold(true).justify(Justify::Center),
+                "Matching Identities"
+                    .cell()
+                    .bold(true)
+                    .justify(Justify::Center),
+                "Logged At".cell().bold(true).justify(Justify::Center),
+                "Issuer CA ID".cell().bold(true).justify(Justify::Center),
+                "Issuer Name".cell().bold(true).justify(Justify::Center),
+                "Name Value".cell().bold(true).justify(Justify::Center),
+                "Not Before".cell().bold(true).justify(Justify::Center),
+                "Not After".cell().bold(true).justify(Justify::Center),
+                "Count".cell().bold(true).justify(Justify::Center),
+                "Serial Number".cell().bold(true).justify(Justify::Center),
+            ]);
+
+            assert!(print_stdout(ts).is_ok());
+        }
     }
-
-    let ts = table
-        .table()
-        .title(vec![
-            "crt.sh ID".cell().bold(true).justify(Justify::Center),
-            "Matching Identities".cell().bold(true).justify(Justify::Center),
-            "Logged At".cell().bold(true).justify(Justify::Center),
-            "Issuer CA ID".cell().bold(true).justify(Justify::Center),
-            "Issuer Name".cell().bold(true).justify(Justify::Center),
-            "Name Value".cell().bold(true).justify(Justify::Center),
-            "Not Before".cell().bold(true).justify(Justify::Center),
-            "Not After".cell().bold(true).justify(Justify::Center),
-            "Count".cell().bold(true).justify(Justify::Center),
-            "Serial Number".cell().bold(true).justify(Justify::Center),
-        ]);
-
-    assert!(print_stdout(ts).is_ok());
 
     Ok(())
 }
