@@ -1,6 +1,6 @@
 use crate::crt::Crt;
 use cli_table::format::Justify;
-use cli_table::{Cell, Style, Table, print_stdout};
+use cli_table::{Cell, CellStruct, Style, Table, print_stdout};
 use reqwest::Method;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
@@ -53,6 +53,18 @@ const THROUGHPUT_MSG: &str = "Throughput: {} KB/s";
 const HTTP_RETRY_MSG: &str = "HTTP {} - retrying after delay...";
 const REQUEST_ERROR_RETRY_MSG: &str = "Request error: {} - retrying after delay...";
 
+// カラム名
+pub(crate) const COLUMN_ID: &str = "id";
+pub(crate) const COLUMN_COMMON_NAME: &str = "common_name";
+pub(crate) const COLUMN_ENTRY_TIMESTAMP: &str = "entry_timestamp";
+pub(crate) const COLUMN_ISSUER_CA_ID: &str = "issuer_ca_id";
+pub(crate) const COLUMN_ISSUER_NAME: &str = "issuer_name";
+pub(crate) const COLUMN_NAME_VALUE: &str = "name_value";
+pub(crate) const COLUMN_NOT_BEFORE: &str = "not_before";
+pub(crate) const COLUMN_NOT_AFTER: &str = "not_after";
+pub(crate) const COLUMN_RESULT_COUNT: &str = "result_count";
+pub(crate) const COLUMN_SERIAL_NUMBER: &str = "serial_number";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Format {
     Table,
@@ -68,6 +80,7 @@ pub struct Config {
     pub url: String,
     pub verbose: bool,
     pub format: Format,
+    pub column_names: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,6 +109,7 @@ impl Default for Config {
             url: String::new(),
             verbose: false,
             format: Format::Table,
+            column_names: Vec::new(),
         }
     }
 }
@@ -209,6 +223,7 @@ fn create_config_from_preset(preset: &ConfigPreset) -> Config {
             "raw" => Format::Raw,
             _ => Format::Table,
         },
+        column_names: Vec::new(),
     }
 }
 
@@ -512,35 +527,94 @@ fn output_response(processed_response: &str, config: &Config) -> Result<(), Box<
 
             let mut table = Vec::new();
             for crt in crts {
-                table.push(vec![
-                    crt.id.cell().justify(Justify::Right),
-                    crt.common_name.cell(),
-                    crt.entry_timestamp.unwrap_or("".to_string()).cell(),
-                    crt.issuer_ca_id.to_string().cell().justify(Justify::Right),
-                    crt.issuer_name.cell(),
-                    crt.name_value.cell(),
-                    crt.not_before.cell(),
-                    crt.not_after.cell(),
-                    crt.result_count.to_string().cell().justify(Justify::Right),
-                    crt.serial_number.cell(),
-                ])
+                let mut row: Vec<CellStruct> = Vec::new();
+
+                if config.column_names.contains(&COLUMN_ID.to_string()) {
+                    row.push(crt.id.cell().justify(Justify::Right));
+                }
+
+                if config.column_names.contains(&COLUMN_COMMON_NAME.to_string()) {
+                    row.push(crt.common_name.cell());
+                }
+
+                if config.column_names.contains(&COLUMN_ENTRY_TIMESTAMP.to_string()) {
+                    row.push(crt.entry_timestamp.unwrap_or("".to_string()).cell());
+                }
+
+                if config.column_names.contains(&COLUMN_ISSUER_CA_ID.to_string()) {
+                    row.push(crt.issuer_ca_id.to_string().cell().justify(Justify::Right));
+                }
+
+                if config.column_names.contains(&COLUMN_ISSUER_NAME.to_string()) {
+                    row.push(crt.issuer_name.cell());
+                }
+
+                if config.column_names.contains(&COLUMN_NAME_VALUE.to_string()) {
+                    row.push(crt.name_value.cell());
+                }
+
+                if config.column_names.contains(&COLUMN_NOT_BEFORE.to_string()) {
+                    row.push(crt.not_before.cell());
+                }
+
+                if config.column_names.contains(&COLUMN_NOT_AFTER.to_string()) {
+                    row.push(crt.not_after.cell());
+                }
+
+                if config.column_names.contains(&COLUMN_RESULT_COUNT.to_string()) {
+                    row.push(crt.result_count.to_string().cell().justify(Justify::Right));
+                }
+
+                if config.column_names.contains(&COLUMN_SERIAL_NUMBER.to_string()) {
+                    row.push(crt.serial_number.cell());
+                }
+
+                table.push(row)
             }
 
-            let ts = table.table().title(vec![
-                "crt.sh ID".cell().bold(true).justify(Justify::Center),
-                "Matching Identities"
-                    .cell()
-                    .bold(true)
-                    .justify(Justify::Center),
-                "Logged At".cell().bold(true).justify(Justify::Center),
-                "Issuer CA ID".cell().bold(true).justify(Justify::Center),
-                "Issuer Name".cell().bold(true).justify(Justify::Center),
-                "Name Value".cell().bold(true).justify(Justify::Center),
-                "Not Before".cell().bold(true).justify(Justify::Center),
-                "Not After".cell().bold(true).justify(Justify::Center),
-                "Count".cell().bold(true).justify(Justify::Center),
-                "Serial Number".cell().bold(true).justify(Justify::Center),
-            ]);
+            let mut header: Vec<CellStruct> = Vec::new();
+
+            if config.column_names.contains(&COLUMN_ID.to_string()) {
+                header.push("crt.sh ID".cell().bold(true).justify(Justify::Center));
+            }
+
+            if config.column_names.contains(&COLUMN_COMMON_NAME.to_string()) {
+                header.push("Matching Identities".cell().bold(true).justify(Justify::Center));
+            }
+
+            if config.column_names.contains(&COLUMN_ENTRY_TIMESTAMP.to_string()) {
+                header.push("Logged At".cell().bold(true).justify(Justify::Center));
+            }
+
+            if config.column_names.contains(&COLUMN_ISSUER_CA_ID.to_string()) {
+                header.push("Issuer CA ID".cell().bold(true).justify(Justify::Center));
+            }
+
+            if config.column_names.contains(&COLUMN_ISSUER_NAME.to_string()) {
+                header.push("Issuer Name".cell().bold(true).justify(Justify::Center),);
+            }
+
+            if config.column_names.contains(&COLUMN_NAME_VALUE.to_string()) {
+                header.push("Name Value".cell().bold(true).justify(Justify::Center));
+            }
+
+            if config.column_names.contains(&COLUMN_NOT_BEFORE.to_string()) {
+                header.push("Not Before".cell().bold(true).justify(Justify::Center));
+            }
+
+            if config.column_names.contains(&COLUMN_NOT_AFTER.to_string()) {
+                header.push("Not After".cell().bold(true).justify(Justify::Center));
+            }
+
+            if config.column_names.contains(&COLUMN_RESULT_COUNT.to_string()) {
+                header.push("Count".cell().bold(true).justify(Justify::Center));
+            }
+
+            if config.column_names.contains(&COLUMN_SERIAL_NUMBER.to_string()) {
+                header.push("Serial Number".cell().bold(true).justify(Justify::Center));
+            }
+
+            let ts = table.table().title(header);
 
             assert!(print_stdout(ts).is_ok());
         }

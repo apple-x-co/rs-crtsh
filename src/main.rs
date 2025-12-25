@@ -1,7 +1,7 @@
 mod client;
 mod crt;
 
-use crate::client::{execute_request, load_config_file, Config, Format};
+use crate::client::{execute_request, load_config_file, Config, Format, COLUMN_COMMON_NAME, COLUMN_ENTRY_TIMESTAMP, COLUMN_ID, COLUMN_ISSUER_CA_ID, COLUMN_ISSUER_NAME, COLUMN_NAME_VALUE, COLUMN_NOT_AFTER, COLUMN_NOT_BEFORE, COLUMN_RESULT_COUNT, COLUMN_SERIAL_NUMBER};
 use crate::client::{DEFAULT_RETRY_COUNT, DEFAULT_RETRY_DELAY, DEFAULT_TIMEOUT_SECS, DEFAULT_FORMAT};
 use clap::Parser;
 use std::error::Error;
@@ -14,6 +14,9 @@ const ERROR_MISSING_URL: &str = "URL is required. Use -u/--url option or specify
 struct Args {
     #[arg(short, long)]
     config: Option<String>,
+
+    #[arg(long = "column_name", action = clap::ArgAction::Append)]
+    column_names: Vec<String>,
 
     #[arg(short, long, default_value = DEFAULT_FORMAT)]
     format: Option<String>,
@@ -105,6 +108,25 @@ fn apply_output_config(config: &mut Config, args: &Args) {
             _ => Format::Table,
         };
     }
+
+    if args.column_names.len() > 0 {
+        config.column_names = args.column_names.clone();
+
+        return;
+    }
+
+    config.column_names = vec![
+        COLUMN_ID.to_string(),
+        COLUMN_COMMON_NAME.to_string(),
+        COLUMN_ENTRY_TIMESTAMP.to_string(),
+        COLUMN_ISSUER_CA_ID.to_string(),
+        COLUMN_ISSUER_NAME.to_string(),
+        COLUMN_NAME_VALUE.to_string(),
+        COLUMN_NOT_BEFORE.to_string(),
+        COLUMN_NOT_AFTER.to_string(),
+        COLUMN_RESULT_COUNT.to_string(),
+        COLUMN_SERIAL_NUMBER.to_string(),
+    ];
 }
 
 // リトライ設定の適用

@@ -57,6 +57,7 @@ rs-crtsh --hostname example.com
 | `--hostname <HOSTNAME>`       | -    | 検索するホスト名/ドメイン               | -       |
 | `--config <CONFIG>`           | `-c` | 設定ファイルのパス                   | -       |
 | `--format <FORMAT>`           | `-f` | 出力形式（table または raw）         | table   |
+| `--column_name <COLUMN_NAME>` | -    | 表示するカラム名（複数指定可能）<br>指定可能な値: `id`, `common_name`, `entry_timestamp`, `issuer_ca_id`, `issuer_name`, `name_value`, `not_before`, `not_after`, `result_count`, `serial_number` | 全て表示  |
 | `--preset <PRESET>`           | -    | 使用するプリセット名                  | -       |
 | `--retry <RETRY>`             | -    | リトライ回数                      | 0       |
 | `--retry-delay <RETRY_DELAY>` | -    | リトライ間隔（秒）                   | 1.0     |
@@ -171,6 +172,27 @@ rs-crtsh --hostname example.com --format raw
 ]
 ```
 
+### 特定のカラムのみを表示
+
+```bash
+# 証明書の ID、ドメイン名、有効期限のみを表示
+rs-crtsh --hostname example.com --column_name id --column_name name_value --column_name not_before --column_name not_after
+```
+
+**出力例:**
+
+```
++-------------+------------------------------------------+---------------------+---------------------+
+|  crt.sh ID  |                Name Value                |     Not Before      |      Not After      |
++-------------+------------------------------------------+---------------------+---------------------+
+| 23164227397 | *.example.com                            | 2025-12-16T00:00:00 | 2026-03-16T20:59:52 |
+|             | example.com                              |                     |                     |
++-------------+------------------------------------------+---------------------+---------------------+
+| 23164227256 | *.example.com                            | 2025-12-16T00:00:00 | 2026-03-16T20:59:52 |
+|             | example.com                              |                     |                     |
++-------------+------------------------------------------+---------------------+---------------------+
+```
+
 ## 設定ファイルの使用
 
 設定ファイルを使用すると、よく使う設定をプリセットとして保存できます。
@@ -226,16 +248,20 @@ rs-crtsh --config config.toml --preset debug --hostname example.com
 
 このツールは、以下の証明書情報を表示します:
 
-- **crt.sh ID**: crt.sh データベース内の証明書 ID
-- **Matching Identities**: 証明書の Common Name（CN）
-- **Logged At**: 証明書が CT ログに記録された日時
-- **Issuer CA ID**: 発行者の認証局 ID
-- **Issuer Name**: 証明書を発行した認証局の名前
-- **Name Value**: 証明書に含まれる Subject Alternative Name（SAN）やその他の識別名
-- **Not Before**: 証明書の有効期間開始日
-- **Not After**: 証明書の有効期間終了日
-- **Count**: マッチした証明書の数
-- **Serial Number**: 証明書のシリアル番号
+| 表示名                  | カラム名              | 説明                                            |
+|----------------------|-------------------|-------------------------------------------------|
+| crt.sh ID            | `id`              | crt.sh データベース内の証明書 ID                        |
+| Matching Identities  | `common_name`     | 証明書の Common Name（CN）                          |
+| Logged At            | `entry_timestamp` | 証明書が CT ログに記録された日時                           |
+| Issuer CA ID         | `issuer_ca_id`    | 発行者の認証局 ID                                    |
+| Issuer Name          | `issuer_name`     | 証明書を発行した認証局の名前                               |
+| Name Value           | `name_value`      | 証明書に含まれる Subject Alternative Name（SAN）やその他の識別名 |
+| Not Before           | `not_before`      | 証明書の有効期間開始日                                   |
+| Not After            | `not_after`       | 証明書の有効期間終了日                                   |
+| Count                | `result_count`    | マッチした証明書の数                                    |
+| Serial Number        | `serial_number`   | 証明書のシリアル番号                                    |
+
+`--column_name` オプションで「カラム名」を指定することで、表示する情報を選択できます。
 
 ## 開発
 
