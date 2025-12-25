@@ -12,33 +12,43 @@ const ERROR_MISSING_URL: &str = "URL is required. Use -u/--url option or specify
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// Path to a configuration file
     #[arg(short, long)]
     config: Option<String>,
 
+    /// List of column names to display in a table
     #[arg(long = "column_name", action = clap::ArgAction::Append)]
     column_names: Vec<String>,
 
+    /// Output format (table or raw)
     #[arg(short, long, default_value = DEFAULT_FORMAT)]
     format: Option<String>,
 
+    /// Hostname to search for
     #[arg(long)]
     hostname: Option<String>,
 
+    /// Preset name from a configuration file
     #[arg(long)]
     preset: Option<String>,
 
+    /// Number of retry attempts
     #[arg(long, default_value_t = DEFAULT_RETRY_COUNT)]
     retry: u32,
 
+    /// Delay between retries in seconds
     #[arg(long, default_value_t = DEFAULT_RETRY_DELAY)]
     retry_delay: f64,
 
+    /// Timeout duration in seconds
     #[arg(short, long, default_value_t = DEFAULT_TIMEOUT_SECS)]
     timeout: u64,
 
+    /// Display timing information
     #[arg(long, default_value_t = false)]
     timing: bool,
 
+    /// Enable verbose output
     #[arg(short, long, default_value_t = false)]
     verbose: bool,
 }
