@@ -113,8 +113,9 @@ fn apply_request_config(config: &mut Config, args: &Args) {
 fn apply_output_config(config: &mut Config, args: &Args) {
     if let Some(format) = &args.format {
         config.format = match format.as_str() {
-            "table" => Format::Table,
+            "csv" => Format::Csv,
             "raw" => Format::Raw,
+            "table" => Format::Table,
             _ => Format::Table,
         };
     }

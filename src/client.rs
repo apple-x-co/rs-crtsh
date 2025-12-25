@@ -9,8 +9,9 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
-use std::thread;
+use std::{io, thread};
 use std::time::{Duration, Instant};
+use csv::Writer;
 
 // アプリケーション情報
 const USER_AGENT: &str = "rs-crtsh/1.0";
@@ -67,8 +68,9 @@ pub(crate) const COLUMN_SERIAL_NUMBER: &str = "serial_number";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Format {
-    Table,
+    Csv,
     Raw,
+    Table,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,8 +221,9 @@ fn create_config_from_preset(preset: &ConfigPreset) -> Config {
             .unwrap_or(DEFAULT_FORMAT.to_string())
             .as_str()
         {
-            "table" => Format::Table,
+            "csv" => Format::Csv,
             "raw" => Format::Raw,
+            "table" => Format::Table,
             _ => Format::Table,
         },
         column_names: Vec::new(),
@@ -262,7 +265,7 @@ fn create_http_client(
         .user_agent(USER_AGENT);
 
     let mut default_headers = reqwest::header::HeaderMap::new();
-    default_headers.insert(reqwest::header::USER_AGENT, USER_AGENT.parse().unwrap());
+    default_headers.insert(reqwest::header::USER_AGENT, USER_AGENT.parse()?);
 
     Ok((client_builder.build()?, default_headers))
 }
@@ -347,7 +350,7 @@ fn execute_request_with_retry(
 
         let request_start = Instant::now();
 
-        match client.execute(retry_request) {
+        return match client.execute(retry_request) {
             Ok(response) => {
                 let status = response.status();
 
@@ -356,14 +359,15 @@ fn execute_request_with_retry(
                     continue;
                 }
 
-                return handle_successful_response(response, request_start, overall_start);
+                handle_successful_response(response, request_start, overall_start)
             }
             Err(e) => {
                 if current_attempt < max_attempts {
                     handle_request_error_retry(config, current_attempt, &e);
                     continue;
                 }
-                return Err(e.into());
+
+                Err(e.into())
             }
         }
     }
@@ -519,8 +523,102 @@ fn format_response_body(body: &str, _config: &Config) -> Result<String, Box<dyn 
 /// レスポンスを出力
 fn output_response(processed_response: &str, config: &Config) -> Result<(), Box<dyn Error>> {
     match config.format {
-        Format::Raw => {
-            println!("{}", processed_response);
+        Format::Csv => {
+            let crts: Vec<Crt> = from_str(processed_response)?;
+
+            let mut wtr = Writer::from_writer(io::stdout());
+
+            let mut header: Vec<&str> = Vec::new();
+
+            if config.column_names.contains(&COLUMN_ID.to_string()) {
+                header.push("id");
+            }
+
+            if config.column_names.contains(&COLUMN_COMMON_NAME.to_string()) {
+                header.push("Matching Identities");
+            }
+
+            if config.column_names.contains(&COLUMN_ENTRY_TIMESTAMP.to_string()) {
+                header.push("Logged At");
+            }
+
+            if config.column_names.contains(&COLUMN_ISSUER_CA_ID.to_string()) {
+                header.push("Issuer CA ID");
+            }
+
+            if config.column_names.contains(&COLUMN_ISSUER_NAME.to_string()) {
+                header.push("Issuer Name");
+            }
+
+            if config.column_names.contains(&COLUMN_NAME_VALUE.to_string()) {
+                header.push("Name Value");
+            }
+
+            if config.column_names.contains(&COLUMN_NOT_BEFORE.to_string()) {
+                header.push("Not Before");
+            }
+
+            if config.column_names.contains(&COLUMN_NOT_AFTER.to_string()) {
+                header.push("Not After");
+            }
+
+            if config.column_names.contains(&COLUMN_RESULT_COUNT.to_string()) {
+                header.push("Count");
+            }
+
+            if config.column_names.contains(&COLUMN_SERIAL_NUMBER.to_string()) {
+                header.push("Serial Number");
+            }
+
+            wtr.write_record(header)?;
+
+            for crt in crts {
+                let mut row: Vec<String> = Vec::new();
+
+                if config.column_names.contains(&COLUMN_ID.to_string()) {
+                    row.push(crt.id.to_string());
+                }
+
+                if config.column_names.contains(&COLUMN_COMMON_NAME.to_string()) {
+                    row.push(crt.common_name);
+                }
+
+                if config.column_names.contains(&COLUMN_ENTRY_TIMESTAMP.to_string()) {
+                    row.push(crt.entry_timestamp.unwrap_or("".to_string()));
+                }
+
+                if config.column_names.contains(&COLUMN_ISSUER_CA_ID.to_string()) {
+                    row.push(crt.issuer_ca_id.to_string());
+                }
+
+                if config.column_names.contains(&COLUMN_ISSUER_NAME.to_string()) {
+                    row.push(crt.issuer_name);
+                }
+
+                if config.column_names.contains(&COLUMN_NAME_VALUE.to_string()) {
+                    row.push(crt.name_value);
+                }
+
+                if config.column_names.contains(&COLUMN_NOT_BEFORE.to_string()) {
+                    row.push(crt.not_before);
+                }
+
+                if config.column_names.contains(&COLUMN_NOT_AFTER.to_string()) {
+                    row.push(crt.not_after);
+                }
+
+                if config.column_names.contains(&COLUMN_RESULT_COUNT.to_string()) {
+                    row.push(crt.result_count.to_string());
+                }
+
+                if config.column_names.contains(&COLUMN_SERIAL_NUMBER.to_string()) {
+                    row.push(crt.serial_number);
+                }
+
+                wtr.write_record(row)?;
+            }
+
+            wtr.flush()?;
         }
         Format::Table => {
             let crts: Vec<Crt> = from_str(processed_response)?;
@@ -617,6 +715,9 @@ fn output_response(processed_response: &str, config: &Config) -> Result<(), Box<
             let ts = table.table().title(header);
 
             assert!(print_stdout(ts).is_ok());
+        }
+        Format::Raw => {
+            println!("{}", processed_response);
         }
     }
 

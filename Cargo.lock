@@ -961,6 +961,7 @@ version = "0.1.2"
 dependencies = [
  "clap",
  "cli-table",
+ "csv",
  "reqwest",
  "serde",
  "serde_json",
