@@ -52,20 +52,20 @@ rs-crtsh --hostname example.com
 
 ### オプション一覧
 
-| オプション                         | 短縮形  | 説明                          | デフォルト   |
-|-------------------------------|------|-----------------------------|---------|
-| `--hostname <HOSTNAME>`       | -    | 検索するホスト名/ドメイン               | -       |
-| `--config <CONFIG>`           | `-c` | 設定ファイルのパス                   | -       |
-| `--format <FORMAT>`           | `-f` | 出力形式（table または raw）         | table   |
+| オプション                         | 短縮形  | 説明                                                                                                                                                                          | デフォルト |
+|-------------------------------|------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------|
+| `--hostname <HOSTNAME>`       | -    | 検索するホスト名/ドメイン                                                                                                                                                               | -     |
+| `--config <CONFIG>`           | `-c` | 設定ファイルのパス                                                                                                                                                                   | -     |
+| `--format <FORMAT>`           | `-f` | 出力形式（table, csv または raw）                                                                                                                                                    | table |
 | `--column_name <COLUMN_NAME>` | -    | 表示するカラム名（複数指定可能）<br>指定可能な値: `id`, `common_name`, `entry_timestamp`, `issuer_ca_id`, `issuer_name`, `name_value`, `not_before`, `not_after`, `result_count`, `serial_number` | 全て表示  |
-| `--preset <PRESET>`           | -    | 使用するプリセット名                  | -       |
-| `--retry <RETRY>`             | -    | リトライ回数                      | 0       |
-| `--retry-delay <RETRY_DELAY>` | -    | リトライ間隔（秒）                   | 1.0     |
-| `--timeout <TIMEOUT>`         | `-t` | タイムアウト時間（秒）                 | 30      |
-| `--timing`                    | -    | タイミング情報を表示                  | false   |
-| `--verbose`                   | `-v` | 詳細な情報を表示                    | false   |
-| `--help`                      | `-h` | ヘルプメッセージを表示                 | -       |
-| `--version`                   | `-V` | バージョン情報を表示                  | -       |
+| `--preset <PRESET>`           | -    | 使用するプリセット名                                                                                                                                                                  | -     |
+| `--retry <RETRY>`             | -    | リトライ回数                                                                                                                                                                      | 0     |
+| `--retry-delay <RETRY_DELAY>` | -    | リトライ間隔（秒）                                                                                                                                                                   | 1.0   |
+| `--timeout <TIMEOUT>`         | `-t` | タイムアウト時間（秒）                                                                                                                                                                 | 30    |
+| `--timing`                    | -    | タイミング情報を表示                                                                                                                                                                  | false |
+| `--verbose`                   | `-v` | 詳細な情報を表示                                                                                                                                                                    | false |
+| `--help`                      | `-h` | ヘルプメッセージを表示                                                                                                                                                                 | -     |
+| `--version`                   | `-V` | バージョン情報を表示                                                                                                                                                                  | -     |
 
 ## 実行例
 
@@ -172,6 +172,25 @@ rs-crtsh --hostname example.com --format raw
 ]
 ```
 
+### CSV 形式で出力
+
+```bash
+# CSV 形式で証明書データを出力
+rs-crtsh --hostname example.com --format csv
+```
+
+**出力例:**
+
+```csv
+id,issuer_ca_id,issuer_name,common_name,name_value,entry_timestamp,not_before,not_after,serial_number
+23164227397,204407,"C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV E36",example.com,"*.example.com
+example.com",2025-12-16T21:50:43.225,2025-12-16T00:00:00,2026-03-16T20:59:52,4b87ab08fde761c73d3c9f7a6a141bd3
+23164227256,204407,"C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV E36",example.com,"*.example.com
+example.com",2025-12-16T21:50:41.574,2025-12-16T00:00:00,2026-03-16T20:59:52,4b87ab08fde761c73d3c9f7a6a141bd3
+23163376071,204406,"C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",example.com,"*.example.com
+example.com",2025-12-16T20:59:37.431,2025-12-16T00:00:00,2026-03-16T16:12:36,7492bfdffaa42846b8a14370d3d8b3f5
+```
+
 ### 特定のカラムのみを表示
 
 ```bash
@@ -229,6 +248,13 @@ timing = false
 verbose = false
 retry = 0
 format = "raw"
+
+[presets.csv]
+timeout = 30
+timing = false
+verbose = false
+retry = 0
+format = "csv"
 ```
 
 ### 設定ファイルを使用して実行
@@ -248,18 +274,18 @@ rs-crtsh --config config.toml --preset debug --hostname example.com
 
 このツールは、以下の証明書情報を表示します:
 
-| 表示名                  | カラム名              | 説明                                            |
-|----------------------|-------------------|-------------------------------------------------|
-| crt.sh ID            | `id`              | crt.sh データベース内の証明書 ID                        |
-| Matching Identities  | `common_name`     | 証明書の Common Name（CN）                          |
-| Logged At            | `entry_timestamp` | 証明書が CT ログに記録された日時                           |
-| Issuer CA ID         | `issuer_ca_id`    | 発行者の認証局 ID                                    |
-| Issuer Name          | `issuer_name`     | 証明書を発行した認証局の名前                               |
-| Name Value           | `name_value`      | 証明書に含まれる Subject Alternative Name（SAN）やその他の識別名 |
-| Not Before           | `not_before`      | 証明書の有効期間開始日                                   |
-| Not After            | `not_after`       | 証明書の有効期間終了日                                   |
-| Count                | `result_count`    | マッチした証明書の数                                    |
-| Serial Number        | `serial_number`   | 証明書のシリアル番号                                    |
+| 表示名                 | カラム名              | 説明                                             |
+|---------------------|-------------------|------------------------------------------------|
+| crt.sh ID           | `id`              | crt.sh データベース内の証明書 ID                          |
+| Matching Identities | `common_name`     | 証明書の Common Name（CN）                           |
+| Logged At           | `entry_timestamp` | 証明書が CT ログに記録された日時                             |
+| Issuer CA ID        | `issuer_ca_id`    | 発行者の認証局 ID                                     |
+| Issuer Name         | `issuer_name`     | 証明書を発行した認証局の名前                                 |
+| Name Value          | `name_value`      | 証明書に含まれる Subject Alternative Name（SAN）やその他の識別名 |
+| Not Before          | `not_before`      | 証明書の有効期間開始日                                    |
+| Not After           | `not_after`       | 証明書の有効期間終了日                                    |
+| Count               | `result_count`    | マッチした証明書の数                                     |
+| Serial Number       | `serial_number`   | 証明書のシリアル番号                                     |
 
 `--column_name` オプションで「カラム名」を指定することで、表示する情報を選択できます。
 

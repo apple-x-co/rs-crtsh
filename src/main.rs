@@ -20,7 +20,7 @@ struct Args {
     #[arg(long = "column_name", action = clap::ArgAction::Append)]
     column_names: Vec<String>,
 
-    /// Output format (table or raw)
+    /// Output format (table, csv, or raw)
     #[arg(short, long, default_value = DEFAULT_FORMAT)]
     format: Option<String>,
 
