@@ -66,6 +66,89 @@ pub(crate) const COLUMN_NOT_AFTER: &str = "not_after";
 pub(crate) const COLUMN_RESULT_COUNT: &str = "result_count";
 pub(crate) const COLUMN_SERIAL_NUMBER: &str = "serial_number";
 
+// カラム定義
+struct ColumnDefinition {
+    column_name: &'static str,
+    csv_header: &'static str,
+    table_header: &'static str,
+    extract_csv_value: fn(&Crt) -> String,
+    extract_table_cell: fn(&Crt) -> CellStruct,
+}
+
+// 全カラムの定義
+const COLUMN_DEFINITIONS: &[ColumnDefinition] = &[
+    ColumnDefinition {
+        column_name: COLUMN_ID,
+        csv_header: "id",
+        table_header: "crt.sh ID",
+        extract_csv_value: |crt| crt.id.to_string(),
+        extract_table_cell: |crt| crt.id.cell().justify(Justify::Right),
+    },
+    ColumnDefinition {
+        column_name: COLUMN_COMMON_NAME,
+        csv_header: "Matching Identities",
+        table_header: "Matching Identities",
+        extract_csv_value: |crt| crt.common_name.clone(),
+        extract_table_cell: |crt| crt.common_name.clone().cell(),
+    },
+    ColumnDefinition {
+        column_name: COLUMN_ENTRY_TIMESTAMP,
+        csv_header: "Logged At",
+        table_header: "Logged At",
+        extract_csv_value: |crt| crt.entry_timestamp.clone().unwrap_or_default(),
+        extract_table_cell: |crt| crt.entry_timestamp.clone().unwrap_or_default().cell(),
+    },
+    ColumnDefinition {
+        column_name: COLUMN_ISSUER_CA_ID,
+        csv_header: "Issuer CA ID",
+        table_header: "Issuer CA ID",
+        extract_csv_value: |crt| crt.issuer_ca_id.to_string(),
+        extract_table_cell: |crt| crt.issuer_ca_id.to_string().cell().justify(Justify::Right),
+    },
+    ColumnDefinition {
+        column_name: COLUMN_ISSUER_NAME,
+        csv_header: "Issuer Name",
+        table_header: "Issuer Name",
+        extract_csv_value: |crt| crt.issuer_name.clone(),
+        extract_table_cell: |crt| crt.issuer_name.clone().cell(),
+    },
+    ColumnDefinition {
+        column_name: COLUMN_NAME_VALUE,
+        csv_header: "Name Value",
+        table_header: "Name Value",
+        extract_csv_value: |crt| crt.name_value.clone(),
+        extract_table_cell: |crt| crt.name_value.clone().cell(),
+    },
+    ColumnDefinition {
+        column_name: COLUMN_NOT_BEFORE,
+        csv_header: "Not Before",
+        table_header: "Not Before",
+        extract_csv_value: |crt| crt.not_before.clone(),
+        extract_table_cell: |crt| crt.not_before.clone().cell(),
+    },
+    ColumnDefinition {
+        column_name: COLUMN_NOT_AFTER,
+        csv_header: "Not After",
+        table_header: "Not After",
+        extract_csv_value: |crt| crt.not_after.clone(),
+        extract_table_cell: |crt| crt.not_after.clone().cell(),
+    },
+    ColumnDefinition {
+        column_name: COLUMN_RESULT_COUNT,
+        csv_header: "Count",
+        table_header: "Count",
+        extract_csv_value: |crt| crt.result_count.to_string(),
+        extract_table_cell: |crt| crt.result_count.to_string().cell().justify(Justify::Right),
+    },
+    ColumnDefinition {
+        column_name: COLUMN_SERIAL_NUMBER,
+        csv_header: "Serial Number",
+        table_header: "Serial Number",
+        extract_csv_value: |crt| crt.serial_number.clone(),
+        extract_table_cell: |crt| crt.serial_number.clone().cell(),
+    },
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Format {
     Csv,
@@ -520,101 +603,57 @@ fn format_response_body(body: &str, _config: &Config) -> Result<String, Box<dyn 
     Ok(formatted)
 }
 
+/// 設定に基づいて有効なカラムをフィルタリング
+fn get_active_columns(config: &Config) -> Vec<&'static ColumnDefinition> {
+    COLUMN_DEFINITIONS
+        .iter()
+        .filter(|col| config.column_names.contains(&col.column_name.to_string()))
+        .collect()
+}
+
+/// CSVヘッダーを構築
+fn build_csv_header<'a>(active_columns: &'a [&'a ColumnDefinition]) -> Vec<&'a str> {
+    active_columns.iter().map(|col| col.csv_header).collect()
+}
+
+/// CSVデータ行を構築
+fn build_csv_row(crt: &Crt, active_columns: &[&ColumnDefinition]) -> Vec<String> {
+    active_columns
+        .iter()
+        .map(|col| (col.extract_csv_value)(crt))
+        .collect()
+}
+
+/// Tableヘッダーを構築
+fn build_table_header(active_columns: &[&ColumnDefinition]) -> Vec<CellStruct> {
+    active_columns
+        .iter()
+        .map(|col| col.table_header.cell().bold(true).justify(Justify::Center))
+        .collect()
+}
+
+/// Tableデータ行を構築
+fn build_table_row(crt: &Crt, active_columns: &[&ColumnDefinition]) -> Vec<CellStruct> {
+    active_columns
+        .iter()
+        .map(|col| (col.extract_table_cell)(crt))
+        .collect()
+}
+
 /// レスポンスを出力
 fn output_response(processed_response: &str, config: &Config) -> Result<(), Box<dyn Error>> {
     match config.format {
         Format::Csv => {
             let crts: Vec<Crt> = from_str(processed_response)?;
+            let active_columns = get_active_columns(config);
 
             let mut wtr = Writer::from_writer(io::stdout());
 
-            let mut header: Vec<&str> = Vec::new();
-
-            if config.column_names.contains(&COLUMN_ID.to_string()) {
-                header.push("id");
-            }
-
-            if config.column_names.contains(&COLUMN_COMMON_NAME.to_string()) {
-                header.push("Matching Identities");
-            }
-
-            if config.column_names.contains(&COLUMN_ENTRY_TIMESTAMP.to_string()) {
-                header.push("Logged At");
-            }
-
-            if config.column_names.contains(&COLUMN_ISSUER_CA_ID.to_string()) {
-                header.push("Issuer CA ID");
-            }
-
-            if config.column_names.contains(&COLUMN_ISSUER_NAME.to_string()) {
-                header.push("Issuer Name");
-            }
-
-            if config.column_names.contains(&COLUMN_NAME_VALUE.to_string()) {
-                header.push("Name Value");
-            }
-
-            if config.column_names.contains(&COLUMN_NOT_BEFORE.to_string()) {
-                header.push("Not Before");
-            }
-
-            if config.column_names.contains(&COLUMN_NOT_AFTER.to_string()) {
-                header.push("Not After");
-            }
-
-            if config.column_names.contains(&COLUMN_RESULT_COUNT.to_string()) {
-                header.push("Count");
-            }
-
-            if config.column_names.contains(&COLUMN_SERIAL_NUMBER.to_string()) {
-                header.push("Serial Number");
-            }
-
+            let header = build_csv_header(&active_columns);
             wtr.write_record(header)?;
 
             for crt in crts {
-                let mut row: Vec<String> = Vec::new();
-
-                if config.column_names.contains(&COLUMN_ID.to_string()) {
-                    row.push(crt.id.to_string());
-                }
-
-                if config.column_names.contains(&COLUMN_COMMON_NAME.to_string()) {
-                    row.push(crt.common_name);
-                }
-
-                if config.column_names.contains(&COLUMN_ENTRY_TIMESTAMP.to_string()) {
-                    row.push(crt.entry_timestamp.unwrap_or("".to_string()));
-                }
-
-                if config.column_names.contains(&COLUMN_ISSUER_CA_ID.to_string()) {
-                    row.push(crt.issuer_ca_id.to_string());
-                }
-
-                if config.column_names.contains(&COLUMN_ISSUER_NAME.to_string()) {
-                    row.push(crt.issuer_name);
-                }
-
-                if config.column_names.contains(&COLUMN_NAME_VALUE.to_string()) {
-                    row.push(crt.name_value);
-                }
-
-                if config.column_names.contains(&COLUMN_NOT_BEFORE.to_string()) {
-                    row.push(crt.not_before);
-                }
-
-                if config.column_names.contains(&COLUMN_NOT_AFTER.to_string()) {
-                    row.push(crt.not_after);
-                }
-
-                if config.column_names.contains(&COLUMN_RESULT_COUNT.to_string()) {
-                    row.push(crt.result_count.to_string());
-                }
-
-                if config.column_names.contains(&COLUMN_SERIAL_NUMBER.to_string()) {
-                    row.push(crt.serial_number);
-                }
-
+                let row = build_csv_row(&crt, &active_columns);
                 wtr.write_record(row)?;
             }
 
@@ -622,96 +661,15 @@ fn output_response(processed_response: &str, config: &Config) -> Result<(), Box<
         }
         Format::Table => {
             let crts: Vec<Crt> = from_str(processed_response)?;
+            let active_columns = get_active_columns(config);
 
             let mut table = Vec::new();
             for crt in crts {
-                let mut row: Vec<CellStruct> = Vec::new();
-
-                if config.column_names.contains(&COLUMN_ID.to_string()) {
-                    row.push(crt.id.cell().justify(Justify::Right));
-                }
-
-                if config.column_names.contains(&COLUMN_COMMON_NAME.to_string()) {
-                    row.push(crt.common_name.cell());
-                }
-
-                if config.column_names.contains(&COLUMN_ENTRY_TIMESTAMP.to_string()) {
-                    row.push(crt.entry_timestamp.unwrap_or("".to_string()).cell());
-                }
-
-                if config.column_names.contains(&COLUMN_ISSUER_CA_ID.to_string()) {
-                    row.push(crt.issuer_ca_id.to_string().cell().justify(Justify::Right));
-                }
-
-                if config.column_names.contains(&COLUMN_ISSUER_NAME.to_string()) {
-                    row.push(crt.issuer_name.cell());
-                }
-
-                if config.column_names.contains(&COLUMN_NAME_VALUE.to_string()) {
-                    row.push(crt.name_value.cell());
-                }
-
-                if config.column_names.contains(&COLUMN_NOT_BEFORE.to_string()) {
-                    row.push(crt.not_before.cell());
-                }
-
-                if config.column_names.contains(&COLUMN_NOT_AFTER.to_string()) {
-                    row.push(crt.not_after.cell());
-                }
-
-                if config.column_names.contains(&COLUMN_RESULT_COUNT.to_string()) {
-                    row.push(crt.result_count.to_string().cell().justify(Justify::Right));
-                }
-
-                if config.column_names.contains(&COLUMN_SERIAL_NUMBER.to_string()) {
-                    row.push(crt.serial_number.cell());
-                }
-
+                let row = build_table_row(&crt, &active_columns);
                 table.push(row)
             }
 
-            let mut header: Vec<CellStruct> = Vec::new();
-
-            if config.column_names.contains(&COLUMN_ID.to_string()) {
-                header.push("crt.sh ID".cell().bold(true).justify(Justify::Center));
-            }
-
-            if config.column_names.contains(&COLUMN_COMMON_NAME.to_string()) {
-                header.push("Matching Identities".cell().bold(true).justify(Justify::Center));
-            }
-
-            if config.column_names.contains(&COLUMN_ENTRY_TIMESTAMP.to_string()) {
-                header.push("Logged At".cell().bold(true).justify(Justify::Center));
-            }
-
-            if config.column_names.contains(&COLUMN_ISSUER_CA_ID.to_string()) {
-                header.push("Issuer CA ID".cell().bold(true).justify(Justify::Center));
-            }
-
-            if config.column_names.contains(&COLUMN_ISSUER_NAME.to_string()) {
-                header.push("Issuer Name".cell().bold(true).justify(Justify::Center),);
-            }
-
-            if config.column_names.contains(&COLUMN_NAME_VALUE.to_string()) {
-                header.push("Name Value".cell().bold(true).justify(Justify::Center));
-            }
-
-            if config.column_names.contains(&COLUMN_NOT_BEFORE.to_string()) {
-                header.push("Not Before".cell().bold(true).justify(Justify::Center));
-            }
-
-            if config.column_names.contains(&COLUMN_NOT_AFTER.to_string()) {
-                header.push("Not After".cell().bold(true).justify(Justify::Center));
-            }
-
-            if config.column_names.contains(&COLUMN_RESULT_COUNT.to_string()) {
-                header.push("Count".cell().bold(true).justify(Justify::Center));
-            }
-
-            if config.column_names.contains(&COLUMN_SERIAL_NUMBER.to_string()) {
-                header.push("Serial Number".cell().bold(true).justify(Justify::Center));
-            }
-
+            let header = build_table_header(&active_columns);
             let ts = table.table().title(header);
 
             assert!(print_stdout(ts).is_ok());
