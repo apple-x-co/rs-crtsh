@@ -7,7 +7,7 @@ use clap::Parser;
 use std::error::Error;
 
 const API_URL: &str = "https://crt.sh/?q=example.com&output=json";
-const ERROR_MISSING_URL: &str = "URL is required. Use -u/--url option or specify in config file.";
+const ERROR_MISSING_URL: &str = "hostname is required. Use --hostname option or specify in config file.";
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
